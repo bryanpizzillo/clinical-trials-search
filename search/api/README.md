@@ -93,4 +93,4 @@ Example: [clinical-trials?current_trial_status_date_gte=2016-08-25](clinical-tri
 
 ## Issues
 
-Please file any questions or issues at the [clinical-trials-search repository](https://github.com/presidential-innovation-fellows/clinical-trials-search/issues).
+Please file any questions or issues at the [clinical-trials-search repository](https://github.com/NCIP/clinical-trials-search/issues).
