@@ -157,18 +157,6 @@
           "assay_purpose": {
             "type": "string"
           },
-          "assay_purpose_description": {
-            "type": "string"
-          },
-          "assay_type_code": {
-            "type": "string"
-          },
-          "assay_type_description": {
-            "type": "string"
-          },
-          "assay_use": {
-            "type": "string"
-          },
           "long_name": {
             "type": "string"
           },
@@ -178,25 +166,7 @@
           "synonyms": {
             "type": "string"
           },
-          "status_code": {
-            "type": "string"
-          },
-          "tissue_collection_method_code": {
-            "type": "string"
-          },
-          "tissue_specimen_type_code": {
-            "type": "string"
-          },
           "hugo_biomarker_code": {
-            "type": "string"
-          },
-          "evaluation_type_code": {
-            "type": "string"
-          },
-          "evaluation_type_other_text": {
-            "type": "string"
-          },
-          "specimen_type_other_text": {
             "type": "string"
           }
         }
