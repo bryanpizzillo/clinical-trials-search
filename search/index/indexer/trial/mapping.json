@@ -92,6 +92,11 @@
                 "analyzer": "keyword_ci",
                 "include_in_all": true
               },
+              "intervention_code": {
+                "type": "string",
+                "analyzer": "keyword_ci",
+                "include_in_all": true
+              },
               "intervention_type": {
                 "type": "string",
                 "analyzer": "keyword_ci",

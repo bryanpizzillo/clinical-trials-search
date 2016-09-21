@@ -276,6 +276,7 @@ SELECT
               json_build_object(
                 'intervention_name', intervention_name,
                 'intervention_type', intervention_type,
+                'intervention_code', intervention_evs_c_code,
                 'intervention_description', intervention_description
               )
             )
