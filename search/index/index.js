@@ -55,9 +55,9 @@ class Indexer {
       //Optimize the index
       (next) => { IndexOptimizer.init(elasticsearchAdapter, trialIndexInfo, termIndexInfo, next); },
       //if all went well, swap aliases
-      (next) => { AliasSwapper.init(elasticsearchAdapter, trialIndexInfo, termIndexInfo, next); }/*,
+      (next) => { AliasSwapper.init(elasticsearchAdapter, trialIndexInfo, termIndexInfo, next); },
       //clean up old indices
-      (next) => { IndexCleaner.init(elasticsearchAdapter, trialIndexInfo.esAlias, termIndexInfo.esAlias, DAYS_TO_KEEP, next); }*/
+      (next) => { IndexCleaner.init(elasticsearchAdapter, trialIndexInfo.esAlias, termIndexInfo.esAlias, DAYS_TO_KEEP, next); }
     ], (err, status) => {
       if (err) {
         this.logger.info("Errors encountered. Exiting.");
