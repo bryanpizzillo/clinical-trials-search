@@ -197,7 +197,8 @@ SELECT
             'synonyms', (
               string_to_array(replace(split_part(biomarker.name, '(', 2), ')', ''), '; ')
             ),
-            'hugo_biomarker_code', biomarker.hugo_biomarker_code
+            'hugo_biomarker_code', biomarker.hugo_biomarker_code,
+            'nt_term_identifier', biomarker.nt_term_identifier
           )
         )
       FROM
