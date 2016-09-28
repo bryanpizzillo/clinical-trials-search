@@ -173,6 +173,10 @@
           },
           "hugo_biomarker_code": {
             "type": "string"
+          },
+          "nt_term_identifier": {
+            "type": "string",
+            "index": "not_analyzed"
           }
         }
       },
