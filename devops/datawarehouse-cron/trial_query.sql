@@ -198,7 +198,7 @@ SELECT
 		        select COALESCE (string_to_array((select((regexp_matches(name, '^.*?\((.*?)\)\s*$'))[1])), '; '), array[]::text[])
             ),
             'hugo_biomarker_code', biomarker.hugo_biomarker_code,
-            'nt_term_identifier', biomarker.nt_term_identifier
+            'nci_thesaurus_concept_id', biomarker.nt_term_identifier
           )
         )
       FROM
