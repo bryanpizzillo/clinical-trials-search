@@ -193,9 +193,9 @@ SELECT
           json_build_object(
             'assay_purpose', biomarker.assay_purpose,
             'long_name', biomarker.long_name,
-            'name', rtrim(split_part(biomarker.name, '(', 1)),
+            'name', rtrim(split_part(biomarker.name, ' (', 1)),
             'synonyms', (
-		        select COALESCE (string_to_array((select((regexp_matches(name, '^.*?\((.*?)\)\s*$'))[1])), '; '), array[]::text[])
+		        select COALESCE (string_to_array((select((regexp_matches(name, '^.*?\s\((.*?)\)\s*$'))[1])), '; '), array[]::text[])
             ),
             'hugo_biomarker_code', biomarker.hugo_biomarker_code,
             'nci_thesaurus_concept_id', biomarker.nt_term_identifier
