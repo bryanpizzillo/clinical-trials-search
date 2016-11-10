@@ -160,23 +160,28 @@
         "include_in_root": true,
         "properties": {
           "assay_purpose": {
-            "type": "string"
+            "type": "string",
+            "analyzer": "keyword_ci"
           },
           "long_name": {
-            "type": "string"
+            "type": "string",
+            "analyzer": "keyword_ci"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "analyzer": "keyword_ci"
           },
           "synonyms": {
-            "type": "string"
+            "type": "string",
+            "analyzer": "keyword_ci"
           },
           "hugo_biomarker_code": {
-            "type": "string"
+            "type": "string",
+            "analyzer": "keyword_ci"
           },
           "nci_thesaurus_concept_id": {
             "type": "string",
-            "index": "not_analyzed"
+            "analyzer": "keyword_ci"
           }
         }
       },
