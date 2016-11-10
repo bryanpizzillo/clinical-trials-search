@@ -193,7 +193,7 @@ SELECT
           json_build_object(
             'assay_purpose', biomarker.assay_purpose,
             'long_name', biomarker.long_name,
-            'name', rtrim(split_part(biomarker.name, ' (', 1)),
+            'name', rtrim(regexp_replace(biomarker.name, '\s\((.*?)\)\s*$', '')),
             'synonyms', (
 		        select COALESCE (string_to_array((select((regexp_matches(name, '^.*?\s\((.*?)\)\s*$'))[1])), '; '), array[]::text[])
             ),
