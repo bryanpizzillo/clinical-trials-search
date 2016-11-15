@@ -2,9 +2,15 @@
 
 set -e
 
-date
-echo 'cleaning up old DW2 dump'
-/bin/psql -U ctrpdw2 -h localhost -p 5472 ctrpdw2 <<EOF
+export PGHOST=localhost
+export PGPORT=5472
+export PGDATABASE=ctrpdw2
+export PGUSER=ctrpdw2
+export PGPASSWORD=$LOCAL_DB_PASSWORD
+
+echo 'Cleaning up old DW2 dump...'
+
+/bin/psql <<EOF
 DROP TABLE IF EXISTS dw_study;
 DROP TABLE IF EXISTS dw_study_arm_and_intervention;
 DROP TABLE IF EXISTS dw_study_association;
@@ -39,11 +45,11 @@ DROP TABLE IF EXISTS hist_dw_study_overall_status;
 DROP TABLE IF EXISTS hist_dw_study_biomarker;
 EOF
 
-date
-echo 'Creating DW dump and piping it to DW2 database'
+echo 'Creating DW dump...'
+export PGPASSWORD=$DW_PASSWORD
+export PGUSER=$DW_USER
 pg_dump -h ncidb-p126.nci.nih.gov \
 	-p 5472\
-	-U copparead \
 	-w \
 	--clean \
 	--create \
@@ -80,12 +86,16 @@ pg_dump -h ncidb-p126.nci.nih.gov \
     -t hist_dw_study_outcome_measure \
     -t hist_dw_study_participating_site \
     -t hist_dw_study_participating_site_investigators \
-    -t hist_dw_study_secondary_purpose dw_ctrpn | /bin/psql -U ctrpdw2  -h localhost -p 5472 ctrpdw2
+    -t hist_dw_study_secondary_purpose dw_ctrpn | gzip --fast > dw_dump.gz
+
+echo 'Restoring DW dump into local DB...'
+export PGUSER=ctrpdw2
+export PGPASSWORD=$LOCAL_DB_PASSWORD
+gunzip -c dw_dump.gz | /bin/psql
 
 
-date
-echo 'create clean DW2 data dump'
-/bin/psql -U ctrpdw2  -h localhost -p 5472 ctrpdw2 <<EOF
+echo 'Create clean DW2 data dump...'
+/bin/psql  <<EOF
 DELETE FROM public.dw_study WHERE processing_status = 'Rejected';
 DELETE FROM public.dw_study WHERE nct_id IS NULL;
 DELETE FROM public.dw_study WHERE nct_id NOT LIKE 'NCT%';
@@ -185,16 +195,11 @@ CREATE INDEX run_id_idx15 ON hist_dw_study_secondary_purpose(run_id);
 EOF
 
 
-#Copy pre amend trials
-date
-echo 'Checking for pre amendment copy of a study'
+echo 'Checking for pre-amendment copy of studies...'
+/bin/psql  -f ./copy_preamend.sql
 
-/bin/psql -U ctrpdw2 -w -h localhost -p 5472 -f ./copy_preamend.sql  ctrpdw2
-echo 'Pre amendment copy done'
-
-date
-echo 'Finally, removing trials that do not NCT ID, do not have appropriate processing_status and filtering out biomarkers.'
-/bin/psql -U ctrpdw2  -h localhost -p 5472 ctrpdw2 <<EOF
+echo 'Finally, removing trials that do not have NCT ID, do not have appropriate processing_status and filtering out biomarkers.'
+/bin/psql  <<EOF
 
 DELETE FROM public.dw_study WHERE nct_id IS NULL;
 DELETE FROM public.dw_study WHERE nct_id NOT LIKE 'NCT%';
@@ -204,16 +209,13 @@ DELETE FROM dw_study_biomarker where NOT (assay_purpose ilike '%Eligibility Crit
 EOF
 
 # Generating DW2 JSON
-date
 echo 'Generating DW2 JSON'
-/bin/psql -U ctrpdw2 -w -h localhost -p 5472 -f ./trial_query.sql -o ./trials.out ctrpdw2
+/bin/psql  -f ./trial_query.sql -o ./trials.out
 
-date
 echo 'Uploading JSON to the S3 bucket'
 aws s3 ls s3://datawarehouse-production/ --human-readable
 aws s3 cp ./trials.out s3://datawarehouse-production/
 aws s3 ls s3://datawarehouse-production/ --human-readable
 zip trials.out.zip trials.out
 rm trials.out
-echo 'all done'	  
-date
+echo 'All done'
