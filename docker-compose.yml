@@ -1,0 +1,33 @@
+####### 
+## This file should help out with standing up
+## the API for testing purposes
+version: '2'
+
+## Start the ES Service
+services:
+  elasticsearch:
+    image: elasticsearch:2.3.3
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    networks:
+      - docker_elk
+    volumes:
+      - ../data/elasticsearch:/usr/share/elasticsearch/data
+  ctapi:
+    build: ./
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5000:5000"
+    environment:
+      somevar: ""
+    networks:
+      - docker_elk
+    volumes:
+      - ../data/ctapi:/usr/src/app/data      
+networks:
+  docker_elk:
+    driver: bridge
