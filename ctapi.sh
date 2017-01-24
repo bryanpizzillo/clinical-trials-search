@@ -12,7 +12,7 @@ function usage
 function run_indexer
 {
     echo "indexer"
-    ls -l .
+    
 }
 
 function run_api
