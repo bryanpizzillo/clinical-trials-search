@@ -1,4 +1,4 @@
 {
-  "ES_HOST": "localhost",
+  "ES_HOST": "elasticsearch",
   "ES_PORT": "9200"
 }
