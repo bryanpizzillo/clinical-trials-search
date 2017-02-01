@@ -2,17 +2,17 @@
 If running this from windows you will need to ensure that the docker VM has mounted the path that you will reference in docker-compose.  If this project lives under your user's home directory, e.g. c:\Users, then you should be all set.  The default Docker toolbox using VirtualBox takes care of this by mounting c:\Users to /c/Users on the virtual machine. 
 
 For example, lets say we are using VirtualBox, the steps would be:
-# Add a Shared Folder for the Virtual Box machine.  This only needs to be done one time for the VirtualBox machine.
-## Open VirtualBox console
-## Right mouse click on docker VM (probably "default") and select "settings"
-## Select the Shared Folders item from the left side menu
-## Right-mouse click on Machine Folders and select "Add Shared Folder"
-## Enter the following:
-### Folder Path: Enter the path to your folder that contains the folder for the docker volume
-### Folder Name: Enter the name of the folder you want as the "share name" (NOTE: This is not the mount point)
-### Read-only: Unchecked
-### Auto-mount: Checked
-### Make Permenent: Checked
+1. Add a Shared Folder for the Virtual Box machine.  This only needs to be done one time for the VirtualBox machine.
+1.1. Open VirtualBox console
+1.1. Right mouse click on docker VM (probably "default") and select "settings"
+1.1. Select the Shared Folders item from the left side menu
+1.1. Right-mouse click on Machine Folders and select "Add Shared Folder"
+1.1. Enter the following:
+     * Folder Path: Enter the path to your folder that contains the folder for the docker volume
+     * Folder Name: Enter the name of the folder you want as the "share name" (NOTE: This is not the mount point)
+     * Read-only: Unchecked
+     * Auto-mount: Checked
+     * Make Permenent: Checked
 ## Click the OK button to create the mount
 ## Click the OK button to close the settings dialog.
 # Open the Docker Quickstart Terminal
@@ -40,3 +40,15 @@ For example:
 * Our docker-compose file references "../data/CTAPI" 
 * This would be converted to "/c/Development/CTAPI/data/CTAPI" -- Note Case matters.
 * If you have a Shared Folder named "c/Development" mounted to "/c/Development", then everything would work.  
+
+## Run the compose
+To start:
+1. 'docker-compose up -d'
+
+To Recreate:
+1. 'docker-compose stop'
+2. 'docker-compose rm'
+3. 'docker-compose up -d'
+
+
+ 
