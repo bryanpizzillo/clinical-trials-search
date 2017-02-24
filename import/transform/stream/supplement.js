@@ -77,6 +77,12 @@ class SupplementStream extends Transform {
         arm.interventions.forEach((intervention) => {
           // TODO: retrieve by id (likely have to modify data warehouse)
           if (this.thesaurusByName[intervention.intervention_name]) {
+
+            //HACK: Added to add C Code to intervention as if it was part of 
+            // the trial dump
+            if (this.thesaurusByName[intervention.intervention_name].code) {
+              intervention.intervention_code = this.thesaurusByName[intervention.intervention_name].code;
+            }
             intervention.synonyms =
               this.thesaurusByName[intervention.intervention_name].synonyms.split("|");
           }
