@@ -2,6 +2,8 @@ const _                   = require("lodash");
 const moment              = require("moment");
 const Transform           = require("stream").Transform;
 const Logger              = require("../../../common/logger");
+const NCIThesaurusLookup  = require("../../../common/nci_thesaurus/nci_thesaurus_lookup");
+const LexEVSClient        = require("../../../common/nci_thesaurus/lexevs_client");
 
 let logger = new Logger({ name: "supplement-stream" });
 
