@@ -49,16 +49,14 @@ class LexEVSClient extends AbstractLexEVSClient {
             
             let rawObj = null;
             
-            //Commented out to work around async issues.  Probably can be 
-            //added back?
             //Parse can throw, so we handle the exception and bail if 
             //it did not work.
-            //try {
+            try {
               rawObj = JSON.parse(content);
-            //} catch (err) {
+            } catch (err) {
               //TODO: add additional info to the error.
-            //  return done(err);
-            //}
+              return done(err);
+            }
             return done(null, rawObj);
         });
         //TODO: add additional info to the error.

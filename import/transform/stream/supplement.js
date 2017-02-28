@@ -85,6 +85,8 @@ class SupplementStream extends Transform {
     //this.thesaurusLookup.getTerm would be called AND an interCB call
     //outside of the callback to getTerm.   
 
+    let lookingUpDrug = false;
+
     // TODO: retrieve by id (likely have to modify data warehouse)
     if (this.thesaurusByName[intervention.intervention_name]) {
       intervention.synonyms =
@@ -99,6 +101,7 @@ class SupplementStream extends Transform {
         //type of intervention should be done using the LexEVS lookup, and cherry
         //picking the best synonyms.
         if (intervention.intervention_type == "Drug") {
+          lookingUpDrug = true;
 
           this.thesaurusLookup.getTerm(intervention.intervention_code, function (err, term) {
             if (err) {
@@ -106,14 +109,39 @@ class SupplementStream extends Transform {
               return interCB(null);  //Quietly Move on as 
             }
 
-            //We have a drug so, do something with it.
+            //We have a drug so, do something with it.  Pull out all Display Name, Brand Name,
+            //foreign brand name, and preferred names with a source of NCI.            
+            let synonyms = term.filterSynonyms('NCI', ['BR', 'FB', 'PT', 'DN']);
+            intervention.drug_names = [];
+
+            //Push the preferred name into drug_names, but ensure they are unique.
+            if (term.preferredName && (! _.some(intervention.drug_names, (name) => name.toLowerCase() == term.preferredName.toLowerCase()))) {
+              intervention.drug_names.push(term.preferredName);
+            }
+
+            //Push the display name into drug_names, but ensure they are unique.
+            if (term.displayName && (! _.some(intervention.drug_names, (name) => name.toLowerCase() == term.displayName.toLowerCase()))) {
+              intervention.drug_names.push(term.displayName);
+            }
+
+            //Push the synonyms into drug_names, but ensure they are unique.
+            synonyms.forEach((syn) => {
+              if (! _.some(intervention.drug_names, (name) => name.toLowerCase() == syn.text.toLowerCase())) {
+                intervention.drug_names.push(syn.text);
+              }
+            });
 
             //We are looking up the drug,
             return interCB(null);
           });
-        } else { return interCB(null); } // Not a drug
-      } else { return interCB(null); } // No NCIt Code
-    } else { return interCB(null); } // No NCIt Lookup
+
+        }
+      }
+    }
+
+    if (!lookingUpDrug) {
+      return interCB(null);
+    }
   }
 
   _processArms(arm, armDone) {
