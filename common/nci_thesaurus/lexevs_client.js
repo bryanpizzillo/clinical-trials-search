@@ -31,10 +31,13 @@ class LexEVSClient extends AbstractLexEVSClient {
     //EX URL: https://lexevscts2.nci.nih.gov/lexevscts2/codesystem/NCI_Thesaurus/version/17.01e/entity/C16357?format=json
     let url = `https://${this.host}/lexevscts2/codesystem/${codeSystem}/version/${codeSystemVersion}/entity/${entityID}?format=json`;
 
+      logger.info(`Fetching EVS term (${url}).`);
+
       https.get(url, (res) => {
 
-        if (res.statusCode != 200) {          
-          return done(new Error(`Invalid Response code (${res.statusCode}) from LexEVS for entity ${entityID}`));
+        if (res.statusCode != 200) {       
+          logger.info(`Error Fetching EVS term (${url}).`);   
+          return done(new Error(`Invalid Response code (${res.statusCode}) from LexEVS for entity ${entityID}`), null);
         }
 
         let content = '';
@@ -46,18 +49,23 @@ class LexEVSClient extends AbstractLexEVSClient {
             
             let rawObj = null;
             
+            //Commented out to work around async issues.  Probably can be 
+            //added back?
             //Parse can throw, so we handle the exception and bail if 
             //it did not work.
-            try {
+            //try {
               rawObj = JSON.parse(content);
-            } catch (err) {
+            //} catch (err) {
               //TODO: add additional info to the error.
-              return done(err);
-            }
-            done(null, rawObj);
+            //  return done(err);
+            //}
+            return done(null, rawObj);
         });
         //TODO: add additional info to the error.
-      }).on('error', done);    
+      }).on('error', (err) => {
+        logger.info(`Error Fetching EVS term (${url}).`);   
+        done(err, null);
+      });    
   }
 
 }

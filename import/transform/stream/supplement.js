@@ -80,6 +80,11 @@ class SupplementStream extends Transform {
 
   _processInterInArm(intervention, interCB) {
 
+    //NOTE: It is important that all conditional paths finally call
+    //the interCB callback, BUT, make sure that there is no path where
+    //this.thesaurusLookup.getTerm would be called AND an interCB call
+    //outside of the callback to getTerm.   
+
     // TODO: retrieve by id (likely have to modify data warehouse)
     if (this.thesaurusByName[intervention.intervention_name]) {
       intervention.synonyms =
@@ -94,24 +99,21 @@ class SupplementStream extends Transform {
         //type of intervention should be done using the LexEVS lookup, and cherry
         //picking the best synonyms.
         if (intervention.intervention_type == "Drug") {
-          logger.info(`Encountered Drug for term (${intervention.intervention_code}).`);
 
           this.thesaurusLookup.getTerm(intervention.intervention_code, function (err, term) {
             if (err) {
-              logger.error(`Drug Fetch Failed for trial with nci_id ().`);
-              return interCB(err);  
+              logger.error(`Drug Fetch Failed for term (${intervention.intervention_code}).`);
+              return interCB(null);  //Quietly Move on as 
             }
-            logger.info(`Fetched Drug for term (${intervention.intervention_code}).`);
+
+            //We have a drug so, do something with it.
 
             //We are looking up the drug,
-            return interCB();
-          });   
-        }
-      }
-    }
-
-    //End processing intervention if a drug was not encountered.
-    return interCB();
+            return interCB(null);
+          });
+        } else { return interCB(null); } // Not a drug
+      } else { return interCB(null); } // No NCIt Code
+    } else { return interCB(null); } // No NCIt Lookup
   }
 
   _processArms(arm, armDone) {
@@ -124,8 +126,6 @@ class SupplementStream extends Transform {
   }
 
   _addTrialInterventions(trial, done){
-    logger.info(`Supplementing interventions for trial with nci_id (${trial.nci_id}).`);
-
     if (trial.arms) {
       //Iterate over each arm.      
       async.eachSeries(
@@ -134,18 +134,18 @@ class SupplementStream extends Transform {
         done
       )
     } else {
-      return done();
+      return done(null);
     }        
   }
   
 
   _addThesaurusTerms(trial, done) {
-    logger.info(`Supplementing thesaurus terms for trial with nci_id (${trial.nci_id}).`);
-
     async.waterfall([
       (next) => { this._addTrialDiseases(trial, next); },
       (next) => { this._addTrialInterventions(trial, next); }
-    ], done);
+    ], (err,res) => {
+      done(err);
+    });
   }
 
   _getDisplayNameFromThesaurus(disease) {
@@ -499,20 +499,17 @@ class SupplementStream extends Transform {
       this._addThesaurusTerms(trial, (err) => {
         if (err) {
           logger.error(err);
-          next();
+          return next();
         }
-        logger.info(`Completed Thesaurus for trial with nci_id (${trial.nci_id}).`);
         this._createTreatments(trial);
         this._createDiseases(trial);
         
         this.push(trial);
-        logger.info(`Moving to next trial after nci_id (${trial.nci_id}).`);
-        next();
-      });
-
-      logger.info(`Completed Transforming trial with nci_id (${trial.nci_id}).`);
+        logger.info(`Completed Transforming trial with nci_id (${trial.nci_id}).`);
+        return next();
+      });      
     } else {
-      next(); // Skip this record.
+      return next(); // Skip this record.
     }
   }
 

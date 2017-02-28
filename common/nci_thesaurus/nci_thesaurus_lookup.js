@@ -46,12 +46,9 @@ class NCIThesaurusLookup {
     //that we fetch the same term multiple times, but it should not result in error...)
 
     if (!this.termCache[entityID]) {
-
-      logger.info(`Looking up Term (${entityID}).`);
-
       this.client.readEntity(
         CODE_SYSTEM_NAME,
-        this.version,
+        this.codeSystemVersion,
         entityID,
         (err, rawObj) => {
           if (err) {
