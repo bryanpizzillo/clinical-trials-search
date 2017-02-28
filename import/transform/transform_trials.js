@@ -7,8 +7,8 @@ const JSONStream          = require("JSONStream");
 
 const TermLoader          = require("../../common/term_loader");
 const Logger              = require("../../common/logger");
-const NCIThesaurusLookup  = require("../../../common/nci_thesaurus/nci_thesaurus_lookup");
-const LexEVSClient        = require("../../../common/nci_thesaurus/lexevs_client");
+const NCIThesaurusLookup  = require("../../common/nci_thesaurus/nci_thesaurus_lookup");
+const LexEVSClient        = require("../../common/nci_thesaurus/lexevs_client");
 
 
 const CleanseStream       = require("./stream/cleanse.js");
@@ -36,7 +36,7 @@ class TrialsTransformer {
   constructor() {
     this.terms = {};
     let client = new LexEVSClient();
-    this.thesaurusLookup = NCIThesaurusLookup(client);
+    this.thesaurusLookup = new NCIThesaurusLookup(client);
   }
 
   _removeSpecialChars(callback) {

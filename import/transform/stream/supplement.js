@@ -60,6 +60,7 @@ class SupplementStream extends Transform {
   }
 
   _addTrialDiseases(trial, done){
+    logger.info(`Supplementing diseases for trial with nci_id (${trial.nci_id}).`);
     if (trial.diseases) {
       trial.diseases.forEach((disease) => {
         let diseaseId = disease.nci_thesaurus_concept_id;
@@ -74,57 +75,76 @@ class SupplementStream extends Transform {
       });
     }
     
-    done(null); //Complete without errors
+    return done(null); //Complete without errors
+  }  
+
+  _processInterInArm(intervention, interCB) {
+
+    // TODO: retrieve by id (likely have to modify data warehouse)
+    if (this.thesaurusByName[intervention.intervention_name]) {
+      intervention.synonyms =
+        this.thesaurusByName[intervention.intervention_name].synonyms.split("|");
+
+      //HACK: Added to add C Code to intervention as if it was part of 
+      // the trial dump
+      if (this.thesaurusByName[intervention.intervention_name].code) {
+        intervention.intervention_code = this.thesaurusByName[intervention.intervention_name].code;
+
+        //This is the new code to lookup the "good" drug synonyms.  Really, each
+        //type of intervention should be done using the LexEVS lookup, and cherry
+        //picking the best synonyms.
+        if (intervention.intervention_type == "Drug") {
+          logger.info(`Encountered Drug for term (${intervention.intervention_code}).`);
+
+          this.thesaurusLookup.getTerm(intervention.intervention_code, function (err, term) {
+            if (err) {
+              logger.error(`Drug Fetch Failed for trial with nci_id ().`);
+              return interCB(err);  
+            }
+            logger.info(`Fetched Drug for term (${intervention.intervention_code}).`);
+
+            //We are looking up the drug,
+            return interCB();
+          });   
+        }
+      }
+    }
+
+    //End processing intervention if a drug was not encountered.
+    return interCB();
+  }
+
+  _processArms(arm, armDone) {
+    //Now iterate over each intervention
+    async.eachSeries(
+      arm.interventions,
+      this._processInterInArm.bind(this),
+      armDone
+    )
   }
 
   _addTrialInterventions(trial, done){
+    logger.info(`Supplementing interventions for trial with nci_id (${trial.nci_id}).`);
+
     if (trial.arms) {
-      //Iterate over each arm.
+      //Iterate over each arm.      
       async.eachSeries(
         trial.arms,
-        (arm, armCB) => {
-          //Now iterate over each intervention
-          async.eachSeries(
-            arm.interventions,
-            (intervention, interventionCB) => {
-              // TODO: retrieve by id (likely have to modify data warehouse)
-              if (this.thesaurusByName[intervention.intervention_name]) {
-                //HACK: Added to add C Code to intervention as if it was part of 
-                // the trial dump
-                if (this.thesaurusByName[intervention.intervention_name].code) {
-                  intervention.intervention_code = this.thesaurusByName[intervention.intervention_name].code;
-                }
-                intervention.synonyms =
-                  this.thesaurusByName[intervention.intervention_name].synonyms.split("|");
-              }
-              //End processing intervention
-              interventionCB(null);
-            },
-            (intErr, intRes) => {
-              //Finsh with the arm.
-              armCB(null);
-            }
-          )
-        },
-        (armErr, armRes) => {
-          done(null);
-        }
+        this._processArms.bind(this),
+        done
       )
-      trial.arms.forEach((arm) => {
-        arm.interventions.forEach((intervention) => {
-        });
-      });
-    }
-
-    done(null);    
+    } else {
+      return done();
+    }        
   }
   
 
   _addThesaurusTerms(trial, done) {
+    logger.info(`Supplementing thesaurus terms for trial with nci_id (${trial.nci_id}).`);
 
     async.waterfall([
-      (next) => { this._addTrialDiseases(trial, done) },
-      (res, next) => { this._addTrialInterventions(trial, done) }
+      (next) => { this._addTrialDiseases(trial, next); },
+      (next) => { this._addTrialInterventions(trial, next); }
     ], done);
   }
 
@@ -477,13 +497,20 @@ class SupplementStream extends Transform {
       this._createAgeInYears(trial);
       this._createLocations(trial);
       this._addThesaurusTerms(trial, (err) => {
-        
+        if (err) {
+          logger.error(err);
+          next();
+        }
+        logger.info(`Completed Thesaurus for trial with nci_id (${trial.nci_id}).`);
         this._createTreatments(trial);
         this._createDiseases(trial);
         
         this.push(trial);
+        logger.info(`Moving to next trial after nci_id (${trial.nci_id}).`);
         next();
       });
+
+      logger.info(`Completed Transforming trial with nci_id (${trial.nci_id}).`);
     } else {
       next(); // Skip this record.
     }

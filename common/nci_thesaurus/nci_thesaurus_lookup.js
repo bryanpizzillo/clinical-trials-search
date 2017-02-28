@@ -47,6 +47,8 @@ class NCIThesaurusLookup {
 
     if (!this.termCache[entityID]) {
 
+      logger.info(`Looking up Term (${entityID}).`);
+
       this.client.readEntity(
         CODE_SYSTEM_NAME,
         this.version,
@@ -60,11 +62,12 @@ class NCIThesaurusLookup {
 
           //Store the term in the cache and "return" the term.
           this.termCache[entityID] = term;
-          done(null, term);
+
+          return done(null, term);
         }
       );
     } else {
-      done(null, this.termCache[entityID]);
+      return done(null, this.termCache[entityID]);
     }
   }
 }
