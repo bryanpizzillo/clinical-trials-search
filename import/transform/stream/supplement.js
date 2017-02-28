@@ -2,8 +2,7 @@ const _                   = require("lodash");
 const moment              = require("moment");
 const Transform           = require("stream").Transform;
 const Logger              = require("../../../common/logger");
-const NCIThesaurusLookup  = require("../../../common/nci_thesaurus/nci_thesaurus_lookup");
-const LexEVSClient        = require("../../../common/nci_thesaurus/lexevs_client");
+const async               = require("async");
 
 let logger = new Logger({ name: "supplement-stream" });
 
@@ -14,6 +13,15 @@ let logger = new Logger({ name: "supplement-stream" });
  * @extends {Transform}
  */
 class SupplementStream extends Transform {
+
+  constructor(thesaurus, neoplasmCore, diseaseBlacklist, thesaurusLookup) {
+    super({ objectMode: true });
+
+    this._createThesaurusLookups(thesaurus);
+    this._createNeoplasmCoreLookup(neoplasmCore);
+    this._createDiseaseBlacklistLookup(diseaseBlacklist);
+    this.thesaurusLookup = thesaurusLookup;
+  }
 
   _createThesaurusLookups(thesaurus) {
     let thesaurusById = {};
@@ -51,15 +59,7 @@ class SupplementStream extends Transform {
     this.diseaseBlacklistById = diseaseBlacklistById;
   }
 
-  constructor(thesaurus, neoplasmCore, diseaseBlacklist) {
-    super({ objectMode: true });
-
-    this._createThesaurusLookups(thesaurus);
-    this._createNeoplasmCoreLookup(neoplasmCore);
-    this._createDiseaseBlacklistLookup(diseaseBlacklist);
-  }
-
-  _addThesaurusTerms(trial) {
+  _addTrialDiseases(trial, done){
     if (trial.diseases) {
       trial.diseases.forEach((disease) => {
         let diseaseId = disease.nci_thesaurus_concept_id;
@@ -73,24 +73,59 @@ class SupplementStream extends Transform {
         }
       });
     }
+    
+    done(null); //Complete without errors
+  }
 
+  _addTrialInterventions(trial, done){
     if (trial.arms) {
+      //Iterate over each arm.
+      async.eachSeries(
+        trial.arms,
+        (arm, armCB) => {
+          //Now iterate over each intervention
+          async.eachSeries(
+            arm.interventions,
+            (intervention, interventionCB) => {
+              // TODO: retrieve by id (likely have to modify data warehouse)
+              if (this.thesaurusByName[intervention.intervention_name]) {
+                //HACK: Added to add C Code to intervention as if it was part of 
+                // the trial dump
+                if (this.thesaurusByName[intervention.intervention_name].code) {
+                  intervention.intervention_code = this.thesaurusByName[intervention.intervention_name].code;
+                }
+                intervention.synonyms =
+                  this.thesaurusByName[intervention.intervention_name].synonyms.split("|");
+              }
+              //End processing intervention
+              interventionCB(null);
+            },
+            (intErr, intRes) => {
+              //Finsh with the arm.
+              armCB(null);
+            }
+          )
+        },
+        (armErr, armRes) => {
+          done(null);
+        }
+      )
       trial.arms.forEach((arm) => {
         arm.interventions.forEach((intervention) => {
-          // TODO: retrieve by id (likely have to modify data warehouse)
-          if (this.thesaurusByName[intervention.intervention_name]) {
-
-            //HACK: Added to add C Code to intervention as if it was part of 
-            // the trial dump
-            if (this.thesaurusByName[intervention.intervention_name].code) {
-              intervention.intervention_code = this.thesaurusByName[intervention.intervention_name].code;
-            }
-            intervention.synonyms =
-              this.thesaurusByName[intervention.intervention_name].synonyms.split("|");
-          }
         });
       });
     }
+
+    done(null);    
+  }
+  
+
+  _addThesaurusTerms(trial, done) {
+
+    async.waterfall([
+      (next) => { this._addTrialDiseases(trial, done) },
+      (res, next) => { this._addTrialInterventions(trial, done) }
+    ], done);
   }
 
   _getDisplayNameFromThesaurus(disease) {
@@ -440,15 +475,18 @@ class SupplementStream extends Transform {
       this._addPhaseSortOrder(trial);
       this._createActiveSitesCount(trial);
       this._createAgeInYears(trial);
-      this._addThesaurusTerms(trial);
       this._createLocations(trial);
-      this._createTreatments(trial);
-      this._createDiseases(trial);
-
-      this.push(trial);
+      this._addThesaurusTerms(trial, (err) => {
+        
+        this._createTreatments(trial);
+        this._createDiseases(trial);
+        
+        this.push(trial);
+        next();
+      });
+    } else {
+      next(); // Skip this record.
     }
-
-    next();
   }
 
 }
