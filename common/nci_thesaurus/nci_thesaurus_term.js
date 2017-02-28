@@ -58,7 +58,7 @@ class NCIThesaurusTerm {
           filtered = _.filter(filtered, (syn) => { return _.includes(type, syn.type); })
         }
       } else {
-        filtered = _.filter(filtered, ['type'], type);
+        filtered = _.filter(filtered, { type: type });
       }
     }
     
