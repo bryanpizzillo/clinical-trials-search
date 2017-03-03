@@ -111,6 +111,7 @@ class SupplementStream extends Transform {
       logger.error(`Intervention encountered without code. (${intervention.intervention_name}).`);
       return done(null);
     } else {
+
       //Get the term from LexEVS in order to add synonyms  
       this.thesaurusLookup.getTerm(intervention.intervention_code, function (err, term) {
         if (err) {
@@ -131,7 +132,11 @@ class SupplementStream extends Transform {
           intervention.synonyms.push(term.displayName);
         }
 
-        if (intervention.intervention_type == "Drug" || intervention.intervention_type == "Biological / Vaccine") {
+        if (
+          intervention.intervention_type == "Drug" || 
+          intervention.intervention_type == "Biological/Vaccine" ||
+          intervention.intervention_type == "Dietary Supplement"
+        ) {
           //We have a drug so, do something with it.  Pull out all Display Name, Brand Name,
           //foreign brand name, and preferred names with a source of NCI.
           //We will replace the synonyms
@@ -400,9 +405,13 @@ class SupplementStream extends Transform {
 
     let drugs = [];
 
-    trial.arms.forEach((arm) => {
+    trial.arms.forEach((arm) => {      
       //Get only "drug" types
-      _.filter(arm.interventions, (intr) => intr.intervention_type == "Drug" || intr.intervention_type == "Biological / Vaccine")
+      _.filter(arm.interventions, (intr) => 
+          intr.intervention_type == "Drug" || 
+          intr.intervention_type == "Biological/Vaccine" ||
+          intr.intervention_type == "Dietary Supplement"
+        )
         //Iterate over those "drugs"
         .forEach((intr) => {
           //Iterate over the synonyms
@@ -410,7 +419,8 @@ class SupplementStream extends Transform {
             if (!_.some(drugs, (drug) => drug.code == intr.intervention_code && drug.name == syn)) {
               drugs.push({
                 name: syn,
-                code: intr.intervention_code
+                code: intr.intervention_code,
+                type: intr.intervention_type
               });
             }
           })

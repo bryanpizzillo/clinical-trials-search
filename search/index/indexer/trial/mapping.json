@@ -11,6 +11,11 @@
             "analyzer": "keyword_ci",
             "include_in_all": true
           },
+          "type": {
+            "type": "string",
+            "analyzer": "keyword_ci",
+            "include_in_all": true
+          },          
           "name": {
             "type": "string",
             "analyzer": "keyword_ci",
@@ -41,7 +46,7 @@
             "type": "string",
             "analyzer": "keyword_ci",
             "include_in_all": false,
-            "fields": {
+            "fields": { 
               "_fulltext": {
                 "type": "string",
                 "analyzer": "englishfulltext"
@@ -456,7 +461,16 @@
         "fields": {
           "_fulltext": {
             "type": "string",
-            "analyzer": "englishfulltext"
+            "analyzer": "englishfulltext"                        
+          },
+          "_raw": {
+            "type": "string",
+            "index": "not_analyzed"
+          },
+          "_auto": {
+            "type": "string",
+            "analyzer": "autocomplete_index",
+            "search_analyzer": "autocomplete_search"                    
           }
         }
       },
@@ -542,7 +556,13 @@
           "phase": {
             "type": "string",
             "analyzer": "keyword_ci",
-            "include_in_all": false
+            "include_in_all": false,
+            "fields" : {
+              "_raw": {
+                "type": "string",
+                "index": "not_analyzed"
+              }
+            }
           },
           "_phase_sort_order": {
             "type": "short",
@@ -572,7 +592,13 @@
           "primary_purpose_code": {
             "type": "string",
             "analyzer": "keyword_ci",
-            "include_in_all": false
+            "include_in_all": false,
+            "fields" : {
+              "_raw": {
+                "type": "string",
+                "index": "not_analyzed"
+              }
+            }            
           },
           "_primary_purpose_code_sort_order": {
             "type": "short",
@@ -626,7 +652,16 @@
             "fields": {
               "_fulltext": {
                 "type": "string"
-              }
+              },
+              "_raw": {
+                "type": "string",
+                "index": "not_analyzed"
+              },
+              "_auto": {
+                "type": "string",
+                "analyzer": "autocomplete_index",
+                "search_analyzer": "autocomplete_search"                    
+              }              
             }
           },
           "contact_phone": {
@@ -683,7 +718,13 @@
           "org_country": {
             "type": "string",
             "analyzer": "keyword_ci",
-            "include_in_all": false
+            "include_in_all": false,
+            "fields" : {
+              "_raw": {
+                "type": "string",
+                "index": "not_analyzed"
+              }
+            }            
           },
           "org_email": {
             "type": "string",
@@ -708,6 +749,15 @@
               "_fulltext": {
                 "type": "string",
                 "analyzer": "englishfulltext"
+              },
+              "_raw": {
+                "type": "string",
+                "index": "not_analyzed"
+              },
+              "_auto": {
+                "type": "string",
+                "analyzer": "autocomplete_index",
+                "search_analyzer": "autocomplete_search"                    
               }
             }
           },

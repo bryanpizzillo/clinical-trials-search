@@ -611,6 +611,261 @@ class Searcher {
     });
   }
 
+  /**
+   * Handles "coded" aggregations like _drugs, where there is a Name/Code pair that
+   * should be returned.
+   * 
+   * @param {any} q
+   * @returns
+   * 
+   * @memberOf Searcher
+   */
+  _getCodedAggregation(q) {
+      let path = q["agg_field"];
+
+
+      //This is an aggregate for grouping the code with the term.  This is the inner most
+      //part of the aggregate and basically is returning the name and the code for this 
+      //specific drug.
+      let groupAgg = {};
+      groupAgg[path] = {
+        "terms": {
+          "field" : path + ".name._raw"
+        }
+      };
+      groupAgg[path]["aggs"] = {};
+      groupAgg[path]["aggs"][path + ".code"] = {
+        "terms": {
+          "field": path + ".code"
+        }
+      }
+
+      //This is adding a filter for type ahead if a user supplied the agg_term param
+      let innerAgg = {};
+      if (q["agg_term"]) {
+
+        
+        innerAgg[path + "_filtered"] = {
+          "filter": {
+            "query": {
+              "match": {}
+            }
+          }
+        };
+        innerAgg[path + "_filtered"]["filter"]["query"]["match"][path + ".name._auto"] = q["agg_term"];
+        innerAgg[path + "_filtered"]["aggs"] = groupAgg;
+      } else {
+        innerAgg = groupAgg;
+      }
+
+      //This is adding the nested part of the query.  This ensures that we are getting
+      //(and filtering) on the correct pairs of name/code pairs.  
+      let nested = {};
+      nested[path + "_nested"] = {
+        "nested": {
+          "path": path
+        }
+      };
+      nested[path + "_nested"]["aggs"] = innerAgg;      
+      
+      return nested;
+  }
+
+  /**
+   * Get a filtered aggregate, which is an aggregate request where the
+   * _agg_term parameter has been specified.
+   * 
+   * @param {any} q
+   * @returns
+   * 
+   * @memberOf Searcher
+   */
+  _getFilteredAggregate(q) {
+    //They are doing autocomplete, so we need handle multiple layers.
+    //body.aggregations()
+
+    //This is doing a type ahead search.  So you must filter the 
+    //aggregates first based on the agg_term, then aggregate what is left.
+
+    let field = q["agg_field"];
+    let tmpAgg = {};
+
+    //The first bit of this aggregation is to filter the aggregates against the supplied
+    //search text.  This says to filter out the objects based on the _auto "sub field" 
+    // of the field name supplied in agg_field.  Use the agg_term as the text to match.
+    //The resulting aggregation will be returned as an object called whatever was supplied
+    //in agg_term appended with "_filtered" indicating the agg results were filtered. 
+    tmpAgg[field + "_filtered"] = {
+      "filter": {
+        "query": {
+          "match": {}
+        }
+      }
+    };
+    tmpAgg[field + "_filtered"]["filter"]["query"]["match"][field + "._auto"] = q["agg_term"];
+
+    //We need to nest the actual values for the aggregation.  We will call the resulting
+    //object "suggestion".  This will use a terms aggregation to aggregate the values 
+    //in the _raw "sub field."  The _raw sub field should be the unmodified field.
+    tmpAgg[field + "_filtered"]["aggs"] = {};
+    tmpAgg[field + "_filtered"]["aggs"][field] = {"terms": { "field": field + "._raw"}};
+
+    //First off, it is important to make sure that if the field contains a ".", then 
+    //it is most likely a nested field.  We would need to add a nested aggregation.
+    let lastIdx = field.lastIndexOf(".");
+
+    if (lastIdx != -1) {
+      //This is a nested field, and since a field cannot contain a ".", then
+      //the last period must split the path from the field name.
+      let path = field.substr(0, lastIdx);
+
+      let nested = {};
+      nested[field + "_nested"] = { "nested": { "path": path}};
+      nested[field + "_nested"]["aggs"] = tmpAgg;
+      
+      return nested;
+    } else {
+      return tmpAgg;
+    }
+  }
+
+  /**
+   * Adds an aggregation to the que query
+   * 
+   * @param {any} body NOTE: Body is not a BodyBuilder because we need updated BB for that to work.
+   * @param {any} q
+   * 
+   * @memberOf Searcher
+   */
+  _addAggregation(body, q) {
+
+    //TODO: NEED TO ADD SIZE to aggregate fields.  This will allow us to control the
+    //number of terms to be returned.
+
+    //So, our version of BodyBuilder does not support complex aggregations,
+    //and really needs to be updated.  So we are just going to build up the aggregation
+    //from scratch.
+    let aggregation = {};    
+
+    //Drug is special.  Actually, any coded field is special,
+    //but this is the only implementation so far, but this can easily
+    //be extended to _treatments and _diseases.
+    if (q["agg_field"] == "_drugs" ) {
+
+      aggregation = this._getCodedAggregation(q);      
+
+    } else {
+      
+      if (q["agg_term"]) {
+
+        aggregation = this._getFilteredAggregate(q);
+
+      } else {
+        // This is a simple aggregate.  Which is just, go get "counts" of 
+        // the instances of a single field across records.  NOTE: this
+        // is not always the count of the trials associated with that aggregation.
+
+        // Use this for things like country, or phase & type of trial filtering.
+
+        //Use the raw so that we do not get analyzed text back.
+        //Note, for some fields, possibly organizations, inconsistencies
+        //in casing in the field could result in 2 separate entries.
+        //(e.g. University of Maryland and university of maryland) 
+        //This case can be delt with, but it is much more complicated
+        //aggregation.
+
+        let tmpAgg = {}
+        tmpAgg[q["agg_field"]] = {"terms": { "field": q["agg_field"] + "._raw"}};
+
+        aggregation = tmpAgg;
+
+        //TODO: there is a way to get the number of trials this item appears in, 
+        //throught the reverse_nested aggregation -- however this needs more testing
+        //to ensure it is correct, especially for deeply nested objects
+      }
+    }
+
+    // Read the JSON into an object.
+    body["aggs"] = aggregation;
+
+  }
+
+  _aggTrialsQuery(q) {
+    var query;
+    let body = new Bodybuilder();
+
+    //Set the size to 0 so that we get back no trial results and
+    //only the aggregations.
+    body.size(0);
+
+    //NOTE: Aggregations does not support paging.  ES 5.2.0 added support for crude paging (partitioning)
+    //however, if you want aggregates for autosuggest or other types of post-search filters, this should
+    //not need paging.  (Set the max size to say, 50)  
+    //Make sure that if you want a comprehensive list regardless of the query, that the aggregate-able
+    //field is also indexed as part of the terms endpoint.
+
+    this._addNestedFilters(body, q);
+    this._addFieldFilters(body, q);        
+    this._addFullTextQuery(body, q);
+
+        
+    // Turn the query into JSON 
+    query = body.build();
+
+    // add the aggregation
+    this._addAggregation(query, q);
+
+    //logger.info(query);
+    //console.log(query);
+    return query;
+  }
+
+  aggTrials(q, callback) {
+    logger.info("Trial aggregate", q);
+
+    //We should call count, or search with size 0.
+    this.client.search({
+      index: 'cancer-clinical-trials',
+      type: 'trial',
+      body: this._aggTrialsQuery(q)
+    }, (err, res) => {
+      if(err) {
+        logger.error(err);
+        return callback(err);
+      }
+
+      //Get the field name
+      let field = q["agg_field"];
+
+      let bucket = [];
+
+      //If we had to nest, we need to skip over this layer and move
+      //to the next aggregate level down.
+      if (res.aggregations[field + "_nested"]) {                                        
+        if (res.aggregations[field + "_nested"][field + "_filtered"]) {
+          bucket = res.aggregations[field + "_nested"][field + "_filtered"][field].buckets;
+        } else {
+          bucket = res.aggregations[field + "_nested"][field].buckets;
+        }
+      } else if (res.aggregations[field + "_filtered"]) {
+        bucket = res.aggregations[field + "_filtered"][field].buckets;
+      } else {        //untested.
+        bucket = res.aggregations[field].buckets;
+      }
+
+      //TODO: Clean Up Buckets!!
+
+
+      let formattedRes = {
+        total: 0,
+        terms: bucket
+      }
+      return callback(null, formattedRes);
+    });
+  }
+
+  
+
   /***********************************************************************
                                    TERMS
    ***********************************************************************/
