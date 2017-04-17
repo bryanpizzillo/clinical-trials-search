@@ -415,15 +415,19 @@ class SupplementStream extends Transform {
         //Iterate over those "drugs"
         .forEach((intr) => {
           //Iterate over the synonyms
-          intr.synonyms.forEach((syn) => {
-            if (!_.some(drugs, (drug) => drug.code == intr.intervention_code && drug.name == syn)) {
-              drugs.push({
-                name: syn,
-                code: intr.intervention_code,
-                type: intr.intervention_type
-              });
-            }
-          })
+          if (intr.synonyms) {
+            intr.synonyms.forEach((syn) => {
+              if (!_.some(drugs, (drug) => drug.code == intr.intervention_code && drug.name == syn)) {
+                drugs.push({
+                  name: syn,
+                  code: intr.intervention_code,
+                  type: intr.intervention_type
+                });
+              }
+            })
+          } else {
+            logger.warning(`Intervention: ${intr.intervention_name} (${intr.intervention_code}) missing synonyms.`)
+          }
         })
     });
 
