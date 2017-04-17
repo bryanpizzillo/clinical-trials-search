@@ -709,12 +709,13 @@ class Searcher {
    * Get a filtered aggregate, which is an aggregate request where the
    * _agg_term parameter has been specified.
    * 
-   * @param {any} q
+   * @param {any} q The params of the request.
+   * @param {any} size The number of aggregates to return
    * @returns
    * 
    * @memberOf Searcher
    */
-  _getFilteredAggregate(q) {
+  _getFilteredAggregate(q, size) {
     //They are doing autocomplete, so we need handle multiple layers.
     //body.aggregations()
 
@@ -747,7 +748,10 @@ class Searcher {
     //object "suggestion".  This will use a terms aggregation to aggregate the values 
     //in the _raw "sub field."  The _raw sub field should be the unmodified field.
     tmpAgg[field + "_filtered"]["aggs"] = {};
-    tmpAgg[field + "_filtered"]["aggs"][field] = {"terms": { "field": field + "._raw"}};
+    tmpAgg[field + "_filtered"]["aggs"][field] = {"terms": { 
+      "field": field + "._raw",
+      "size": size
+    }};
 
     //First off, it is important to make sure that if the field contains a ".", then 
     //it is most likely a nested field.  We would need to add a nested aggregation.
@@ -776,7 +780,7 @@ class Searcher {
    * 
    * @memberOf Searcher
    */
-  _addAggregation(body, q) {
+  _addAggregation(body, q, size) {
 
     //TODO: NEED TO ADD SIZE to aggregate fields.  This will allow us to control the
     //number of terms to be returned.
@@ -814,7 +818,10 @@ class Searcher {
         //aggregation.
 
         let tmpAgg = {}
-        tmpAgg[q["agg_field"]] = {"terms": { "field": q["agg_field"] + "._raw"}};
+        tmpAgg[q["agg_field"]] = {"terms": { 
+          "field": q["agg_field"] + "._raw",
+          "size": size
+        }};
 
         aggregation = tmpAgg;
 
@@ -833,8 +840,8 @@ class Searcher {
     var query;
     let body = new Bodybuilder();
 
-    //Set the size to 0 so that we get back no trial results and
-    //only the aggregations.
+    //Set the ES size parameter to 0 so that we get back no trial results and
+    //only the aggregations.  This is not related to our "size" parameter
     body.size(0);
 
     //NOTE: Aggregations does not support paging.  ES 5.2.0 added support for crude paging (partitioning)
@@ -851,8 +858,11 @@ class Searcher {
     // Turn the query into JSON 
     query = body.build();
 
+    q.size = q.size ? q.size : TERM_RESULT_SIZE_DEFAULT;
+    let size = q.size > TERM_RESULT_SIZE_MAX ? TERM_RESULT_SIZE_MAX : q.size;
+
     // add the aggregation
-    this._addAggregation(query, q);
+    this._addAggregation(query, q, size);
 
     //logger.info(query);
     //console.log(query);
