@@ -311,6 +311,39 @@ class Searcher {
     });
   }
 
+  /**
+   * Adds a full-text match filter to the body.  The difference between a text matching filter
+   * and query is that a query feeds into the document score, and a filter is just that, a filter,
+   * and it has nothing to do with ranking & sorting.
+   * 
+   */
+  _addFullTextFieldFilters(body, q) {
+    const _addFulltextFieldFilter = (body, field, filter) => {
+      let query = new Bodybuilder();
+
+      if (filter instanceof Array) {
+        let orBody = new Bodybuilder();
+        filter.forEach((filterElement) => {
+          logger.info(filterElement);
+          //Note for the actual query the field name must contain a . before _fulltext
+          query.orQuery("match", field + "._fulltext", filterElement, { type: 'phrase' });
+        });
+      } else {
+        //Note for the actual query the field name must contain a . before _fulltext
+        query.query("match", field + "._fulltext", filter, { type: 'phrase' });
+      }
+
+      body.filter("bool", "and", query.build('v2'));
+    }
+
+    let possibleFulltextProps = searchPropsByType["fulltext"];
+    possibleFulltextProps.forEach((field) => {
+      if (q[field + "_fulltext"]) {
+        _addFulltextFieldFilter(body, field, q[field + "_fulltext"]);
+      }
+    });
+  }
+
   _addDateRangeFilters(body, q) {
     const _addRangeFilter = (field, lteRange, gteRange) => {
       let ranges = {};
@@ -520,6 +553,7 @@ class Searcher {
     this._addFloatRangeFilters(body, q);
     this._addGeoDistanceFilters(body, q);
     this._addBooleanFilters(body, q);
+    this._addFullTextFieldFilters(body, q);
   }
 
   /**
@@ -574,14 +608,14 @@ class Searcher {
     this._addNestedFilters(body, q);
     this._addFieldFilters(body, q);
     this._addSizeFromParams(body, q);
-    this._addIncludeExclude(body, q);
-    this._addFullTextQuery(body, q);
+    this._addIncludeExclude(body, q);    
+    this._addFullTextQuery(body, q);    
 
     this._addSortOrder(body, q);
 
     query = body.build();
 
-    // logger.info(query);
+    logger.info(query);
     return query;
   }
 
@@ -702,7 +736,12 @@ class Searcher {
         }
       }
     };
-    tmpAgg[field + "_filtered"]["filter"]["query"]["match"][field + "._auto"] = q["agg_term"];
+    //Use a phrase match to make sure we match all the words, instead of displaying
+    //partial matches.
+    tmpAgg[field + "_filtered"]["filter"]["query"]["match"][field + "._auto"] = {
+      "type": "phrase",
+      "query": q["agg_term"]
+    };
 
     //We need to nest the actual values for the aggregation.  We will call the resulting
     //object "suggestion".  This will use a terms aggregation to aggregate the values 

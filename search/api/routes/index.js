@@ -44,6 +44,12 @@ const _getInvalidTrialQueryParams = (queryParams) => {
   return without.filter((queryParam) => {
     if (_.includes(searchPropsByType["string"], queryParam)) {
       return false;
+    } else if (queryParam.endsWith("_fulltext")) {
+      //This allows to handle _fulltext querying against specific fields.
+      let paramWithoutOp = queryParam.substring(0, queryParam.lastIndexOf("_"));
+      if ( _.includes(searchPropsByType["fulltext"], paramWithoutOp) ) {
+        return false;
+      }
     } else if (queryParam.endsWith("_gte") || queryParam.endsWith("_lte")) {
       let paramWithoutOp = queryParam.substring(0, queryParam.length - 4);
       if (
@@ -80,6 +86,16 @@ const queryClinicalTrialsAndSendResponse = (q, res, next) => {
     logger.error(error);
     return res.status(400).send(error);
   }
+
+  
+  searcher.searchTrials(q, (err, trials) => {
+    // TODO: add better error handling
+    if(err) {
+      return res.sendStatus(500);
+    }
+    // TODO: format trials
+    res.json(trials);
+  });
 }
 
 /**
@@ -99,6 +115,12 @@ const _getInvalidAggQueryParams = (queryParams) => {
   return without.filter((queryParam) => {
     if (_.includes(searchPropsByType["string"], queryParam)) {
       return false;
+    } else if (queryParam.endsWith("_fulltext")) {
+      //This allows to handle _fulltext querying against specific fields.
+      let paramWithoutOp = queryParam.substring(0, queryParam.lastIndexOf("_"));
+      if ( _.includes(searchPropsByType["fulltext"], paramWithoutOp) ) {
+        return false;
+      }
     } else if (queryParam.endsWith("_gte") || queryParam.endsWith("_lte")) {
       let paramWithoutOp = queryParam.substring(0, queryParam.length - 4);
       if (
@@ -175,6 +197,18 @@ const aggClinicalTrialsAndSendResponse = (q, res, next) => {
   });
 }
 
+/* get clinical trials that match supplied search criteria */
+router.get('/clinical-trials', (req, res, next) => {
+  let q = req.query;
+  queryClinicalTrialsAndSendResponse(q, res, next);
+});
+
+router.post('/clinical-trials', (req, res, next) => {
+  let q = req.body;
+  queryClinicalTrialsAndSendResponse(q, res, next);
+});
+
+
 /* get aggregates for a field that match supplied 
    search criteria 
 */
@@ -186,17 +220,6 @@ router.get('/trial-aggregates', (req, res, next) => {
 router.post('/trial-aggregates', (req, res, next) => {
   let q = req.body;
   aggClinicalTrialsAndSendResponse(q, res, next);
-});
-
-/* get clinical trials that match supplied search criteria */
-router.get('/clinical-trials', (req, res, next) => {
-  let q = req.query;
-  queryClinicalTrialsAndSendResponse(q, res, next);
-});
-
-router.post('/clinical-trials', (req, res, next) => {
-  let q = req.body;
-  queryClinicalTrialsAndSendResponse(q, res, next);
 });
 
 
