@@ -406,6 +406,11 @@ class SupplementStream extends Transform {
       nondrugs: []
     }
 
+    //TODO: For both drugs and non-drugs:
+    // 1. Ensure a intervention is only added once to the list.  Multiple arms
+    //    may include the same intervention.
+    // 2. Break out synonyms into a useful list and make sure that the Prefered name is included.
+
     //Add Drugs
     this._createDrugInterventions(trial);
     //Add Non-Drugs
