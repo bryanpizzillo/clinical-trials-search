@@ -906,6 +906,81 @@ class Searcher {
     return query;
   }
 
+  /**
+   * Cleans up the bucket structure, more so for coded aggregations where the 
+   * nested buckets for codes and synonyms need to be extracted.
+   * 
+   * @param {any} field The field aggregated on
+   * @param {any} bucket A bucket from the ES results.
+   * @returns 
+   * 
+   * @memberOf Searcher
+   */
+  _extractAggBucket(field, bucket) {
+    if (field.match(/^_interventions\./)) {
+      return bucket.map((item) => {
+        let codes = []; 
+        
+        //TODO: This should exist, so determine what to do if it does not.
+        if (item[field + ".code"] && item[field + ".code"].buckets.length > 0) {
+          //Treat as array to match old Terms endpoint, AND support possible diseases multikeys
+          codes = item[field + ".code"].buckets.map((code_bucket) => code_bucket.key);
+        }
+
+        //TODO: Extract synonyms when they are added.
+
+        return {
+          key: item.key,
+          count: item.doc_count,
+          codes: codes
+        }
+      });
+    } else {
+      return bucket.map((item) => {
+        return {
+          key: item.key,
+          count: item.doc_count //This number is != number of trials that have this field.
+        }
+      });
+    }
+
+  }
+
+  /**
+   * Extracts the aggregation from the ES results
+   * 
+   * @param {any} field The field to pull out
+   * @param {any} res The results
+   * @returns 
+   * 
+   * @memberOf Searcher
+   */
+  _extractAggregations(field, res) {
+
+      let bucket = [];
+
+      //If we had to nest, we need to skip over this layer and move
+      //to the next aggregate level down.
+      if (res.aggregations[field + "_nested"]) {                                        
+        if (res.aggregations[field + "_nested"][field + "_filtered"]) {
+          bucket = this._extractAggBucket(field, res.aggregations[field + "_nested"][field + "_filtered"][field].buckets);
+        } else {
+          bucket = this._extractAggBucket(field, res.aggregations[field + "_nested"][field].buckets);
+        }
+      } else if (res.aggregations[field + "_filtered"]) {
+        
+        bucket = this._extractAggBucket(field, es.aggregations[field + "_filtered"][field].buckets);
+      } else {        //untested.
+        bucket = this._extractAggBucket(field, res.aggregations[field].buckets);
+      }
+
+      return {
+        total: 0, //TODO: Get count from agg bucket
+        terms: bucket
+      }
+
+  }
+
   aggTrials(q, callback) {
     logger.info("Trial aggregate", q);
 
@@ -923,29 +998,8 @@ class Searcher {
       //Get the field name
       let field = q["agg_field"];
 
-      let bucket = [];
+      let formattedRes = this._extractAggregations(field, res);
 
-      //If we had to nest, we need to skip over this layer and move
-      //to the next aggregate level down.
-      if (res.aggregations[field + "_nested"]) {                                        
-        if (res.aggregations[field + "_nested"][field + "_filtered"]) {
-          bucket = res.aggregations[field + "_nested"][field + "_filtered"][field].buckets;
-        } else {
-          bucket = res.aggregations[field + "_nested"][field].buckets;
-        }
-      } else if (res.aggregations[field + "_filtered"]) {
-        bucket = res.aggregations[field + "_filtered"][field].buckets;
-      } else {        //untested.
-        bucket = res.aggregations[field].buckets;
-      }
-
-      //TODO: Clean Up Buckets!!
-
-
-      let formattedRes = {
-        total: 0,
-        terms: bucket
-      }
       return callback(null, formattedRes);
     });
   }
