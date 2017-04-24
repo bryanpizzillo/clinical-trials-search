@@ -40,7 +40,7 @@ router.get('/clinical-trial/:id', (req, res, next) => {
 
 const _getInvalidTrialQueryParams = (queryParams) => {
   let without = _.without(queryParams,
-    "from", "size", "sort", "_all", "_fulltext", "include", "exclude");
+    "from", "size", "sort", "_all", "_fulltext", "include", "exclude", "_trialids");
   return without.filter((queryParam) => {
     if (_.includes(searchPropsByType["string"], queryParam)) {
       return false;
@@ -111,7 +111,7 @@ const _getInvalidAggQueryParams = (queryParams) => {
   //    to handle the number requested and the sort order.
   //  - agg_term -- the optional text to be used to preface the term.  
   let without = _.without(queryParams,
-    "agg_field", "agg_term", "size", "sort", "_all", "_fulltext");
+    "agg_field", "agg_term", "size", "sort", "_all", "_fulltext", "_trialids");
   return without.filter((queryParam) => {
     if (_.includes(searchPropsByType["string"], queryParam)) {
       return false;

@@ -393,14 +393,38 @@ class SupplementStream extends Transform {
   }
 
   /**
-   * Add _drugs elements for supporting autosuggests functions similar to diseases and treatments.
-   * This will be setup to support autosuggest within the clinical-trials index.
+   * This adds interventions for searching & suggesting purposes.
    * 
    * @param {any} trial The trial to supplement
    * 
    * @memberOf SupplementStream
    */
-  _createDrugs(trial) {
+  _createSearchInterventions(trial) {
+    //Initialize the search interventions
+    trial["_interventions"] = {
+      drugs: [],
+      nondrugs: []
+    }
+
+    //Add Drugs
+    this._createDrugInterventions(trial);
+    //Add Non-Drugs
+    this._createNonDrugInterventions(trial);
+  }
+
+  /**
+   * Add _interventions_drug field for supporting autosuggest functions for interventions 
+   * that are not "drugs". (Drug; Bological/Vaccine; Dietary Supplement)
+   * 
+   * NOTE: the _treatments field predates the splitting of drugs and other treatments,
+   * removing it would be a breaking change to the API
+   *
+   * @param {any} trial The trial to supplement
+   * 
+   * @memberOf SupplementStream
+   */
+  _createDrugInterventions(trial) {
+
     if (!trial.arms) { return; }
 
     let drugs = [];
@@ -415,6 +439,7 @@ class SupplementStream extends Transform {
         //Iterate over those "drugs"
         .forEach((intr) => {
           //Iterate over the synonyms
+          //TODO: Push synonym names & type into a subcollection of drug for searching.
           if (intr.synonyms) {
             intr.synonyms.forEach((syn) => {
               if (!_.some(drugs, (drug) => drug.code == intr.intervention_code && drug.name == syn)) {
@@ -431,7 +456,47 @@ class SupplementStream extends Transform {
         })
     });
 
-    trial._drugs = drugs;
+    trial._interventions.drugs = drugs;
+  }
+
+  /**
+   * Add _interventions_nondrug field for supporting autosuggest functions for interventions 
+   * that are not "drugs". (Drug; Bological/Vaccine; Dietary Supplement)
+   * 
+   * NOTE: the _treatments field predates the splitting of drugs and other treatments,
+   * removing it would be a breaking change to the API
+   * 
+   * @param {any} trial 
+   * 
+   * @memberOf SupplementStream
+  
+   * 
+   */
+  _createNonDrugInterventions(trial) {
+    
+    if (!trial.arms) { return; }
+
+    let nondrugs = [];
+
+    trial.arms.forEach((arm) => {      
+      //Get only "non-drug" types
+      _.filter(arm.interventions, (intr) => 
+          intr.intervention_type != "Drug" && 
+          intr.intervention_type != "Biological/Vaccine" &&
+          intr.intervention_type != "Dietary Supplement"
+        )
+        //Iterate over those "non-drugs"
+        .forEach((intr) => {
+          
+          nondrugs.push({
+            name: intr.intervention_name,
+            code: intr.intervention_code,
+            type: intr.intervention_type
+          });
+        })
+    });
+
+    trial._interventions.nondrugs = nondrugs;
   }
 
   _createTreatments(trial) {
@@ -592,13 +657,15 @@ class SupplementStream extends Transform {
       this._createActiveSitesCount(trial);
       this._createAgeInYears(trial);
       this._createLocations(trial);
+      //The next step needs to take in a callback since it needs to contact LexEVS
+      //and contacting a remote service is an asynchronous function
       this._addThesaurusTerms(trial, (err) => {
         if (err) {
           logger.error(err);
           return next();
         }
         this._createTreatments(trial);
-        this._createDrugs(trial);
+        this._createSearchInterventions(trial);
         this._createDiseases(trial);
         
         this.push(trial);

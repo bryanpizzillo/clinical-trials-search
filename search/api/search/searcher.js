@@ -344,6 +344,43 @@ class Searcher {
     });
   }
 
+  /**
+   * Adds filters for searching trial IDs (of which there are many)
+   * 
+   * @param {any} body 
+   * @param {any} q
+   * @returns 
+   * 
+   * @memberOf Searcher
+   */
+  _addTrialIDsFilter(body, q) {
+
+    const _addTrialIDFilter = (body, searchstr) => {
+      let query = new Bodybuilder();
+
+      //Add an or for each of the ID fields, querying the _trialid sub-field that is setup as an edge ngram for
+      //supporting "begins with" (on word boundary) type queries.
+      ['ccr_id', 'ctep_id', 'dcp_id', 'nci_id', 'nct_id', 'other_ids.value', 'protocol_id'].forEach((idField) => {
+        query.orQuery("match", idField + '._trialid', searchstr, { type: 'phrase' });
+      })
+
+      body.orQuery("bool", "or", query.build('v2'));
+    }
+
+
+    if (!q["_trialids"])
+      return;
+
+    let searchStrings = (q["_trialids"] instanceof Array) ? q["_trialids"] : [ q["_trialids"] ];
+    let trialIdFilterBody = new Bodybuilder();
+
+    searchStrings.forEach((filterElement) => {
+      _addTrialIDFilter(trialIdFilterBody, filterElement);
+    });
+    
+    body.filter("bool", "and", trialIdFilterBody.build('v2'));
+  }
+
   _addDateRangeFilters(body, q) {
     const _addRangeFilter = (field, lteRange, gteRange) => {
       let ranges = {};
@@ -554,6 +591,7 @@ class Searcher {
     this._addGeoDistanceFilters(body, q);
     this._addBooleanFilters(body, q);
     this._addFullTextFieldFilters(body, q);
+    this._addTrialIDsFilter(body, q);
   }
 
   /**
@@ -608,8 +646,8 @@ class Searcher {
     this._addNestedFilters(body, q);
     this._addFieldFilters(body, q);
     this._addSizeFromParams(body, q);
-    this._addIncludeExclude(body, q);    
-    this._addFullTextQuery(body, q);    
+    this._addIncludeExclude(body, q);
+    this._addFullTextQuery(body, q);     
 
     this._addSortOrder(body, q);
 
@@ -790,13 +828,12 @@ class Searcher {
     //from scratch.
     let aggregation = {};    
 
-    //Drug is special.  Actually, any coded field is special,
+    //Intervions are special.  Actually, any coded field is special,
     //but this is the only implementation so far, but this can easily
-    //be extended to _treatments and _diseases.
-    if (q["agg_field"] == "_drugs" ) {
-
-      aggregation = this._getCodedAggregation(q);      
-
+    //be extended to _diseases.
+    if (q["agg_field"].match(/^_interventions\./)) {
+      //TODO: handle _interventions.drugs differently? (How doe we handle synonyms?)
+      aggregation = this._getCodedAggregation(q);
     } else {
       
       if (q["agg_term"]) {
