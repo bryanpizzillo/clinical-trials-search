@@ -969,7 +969,7 @@ class Searcher {
         }
       } else if (res.aggregations[field + "_filtered"]) {
         
-        bucket = this._extractAggBucket(field, es.aggregations[field + "_filtered"][field].buckets);
+        bucket = this._extractAggBucket(field, res.aggregations[field + "_filtered"][field].buckets);
       } else {        //untested.
         bucket = this._extractAggBucket(field, res.aggregations[field].buckets);
       }
