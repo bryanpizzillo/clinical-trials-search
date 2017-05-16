@@ -16,6 +16,8 @@ const CsvStream           = require("./stream/csv.js");
 const GeoCodingStream     = require("./stream/geo_coding.js");
 const SpecialCharsStream  = require("./stream/special_chars.js");
 const SupplementStream    = require("./stream/supplement.js");
+const ExtractTrialStream  = require("./stream/extract_trial");
+const AddInterventionParentsStream = require("./stream/add_intervention_parents");
 
 let logger = new Logger({ name: "import-transform" });
 
@@ -135,6 +137,8 @@ class TrialsTransformer {
     logger.info("Transforming trials...");
     let rs = fs.createReadStream(path.join(__dirname, TRIALS_FILEPATH + SPECIAL_CHARS_REMOVED_EXT));
     let ls = byline.createStream();
+    let et = new ExtractTrialStream();
+    let ip = new AddInterventionParentsStream(this.thesaurus, this.neoplasmCore, this.diseaseBlacklist, this.thesaurusLookup);
     let ts = new SupplementStream(this.thesaurus, this.neoplasmCore, this.diseaseBlacklist, this.thesaurusLookup);
     let gs = new GeoCodingStream();
     let jw = JSONStream.stringify();
@@ -142,6 +146,10 @@ class TrialsTransformer {
 
     rs.on("error", (err) => { logger.error(err); })
       .pipe(ls)
+      .on("error", (err) => { logger.error(err); })
+      .pipe(et)
+      .on("error", (err) => { logger.error(err); })      
+      .pipe(ip)
       .on("error", (err) => { logger.error(err); })
       .pipe(ts)
       .on("error", (err) => { logger.error(err); })

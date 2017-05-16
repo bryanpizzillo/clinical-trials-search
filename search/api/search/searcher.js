@@ -696,7 +696,7 @@ class Searcher {
       let path = q["agg_field"];
 
 
-      //This is an aggregate for grouping the code with the term.  This is the inner most
+      //This is an aggregate for grouping the code & synonyms with the term.  This is the inner most
       //part of the aggregate and basically is returning the name and the code for this 
       //specific drug.
       let groupAgg = {};
@@ -711,20 +711,48 @@ class Searcher {
           "field": path + ".code"
         }
       }
+      groupAgg[path]["aggs"][path + ".synonyms"] = {
+        "terms": {
+          "field": path + ".synonyms._raw"
+        }
+      }
+      
 
       //This is adding a filter for type ahead if a user supplied the agg_term param
       let innerAgg = {};
       if (q["agg_term"]) {
 
-        
+
+        //This will handle matching both the name and synonyms        
         innerAgg[path + "_filtered"] = {
           "filter": {
             "query": {
-              "match": {}
+              "bool": {
+                "should":[]
+              }
             }
           }
         };
-        innerAgg[path + "_filtered"]["filter"]["query"]["match"][path + ".name._auto"] = q["agg_term"];
+
+        let nameMatch = {
+          "match": {}
+        };
+
+        nameMatch["match"][path + ".name._auto"] = {
+          "type": "phrase",
+          "query": q["agg_term"]
+        }              
+        innerAgg[path + "_filtered"]["filter"]["query"]["bool"]["should"].push(nameMatch);
+
+        let synMatch = {
+          "match": {}
+        };
+        synMatch["match"][path + ".synonyms._auto"] = {
+          "type": "phrase",
+          "query": q["agg_term"]
+        };
+        innerAgg[path + "_filtered"]["filter"]["query"]["bool"]["should"].push(synMatch);
+
         innerAgg[path + "_filtered"]["aggs"] = groupAgg;
       } else {
         innerAgg = groupAgg;
@@ -920,6 +948,7 @@ class Searcher {
     if (field.match(/^_interventions\./)) {
       return bucket.map((item) => {
         let codes = []; 
+        let synonyms = [];
         
         //TODO: This should exist, so determine what to do if it does not.
         if (item[field + ".code"] && item[field + ".code"].buckets.length > 0) {
@@ -928,11 +957,17 @@ class Searcher {
         }
 
         //TODO: Extract synonyms when they are added.
+        if (item[field + ".synonyms"] && item[field + ".synonyms"].buckets.length > 0) {
+          
+          synonyms = item[field + ".synonyms"].buckets.map((syn_bucket) => syn_bucket.key);
+        }
+        
 
         return {
           key: item.key,
           count: item.doc_count,
-          codes: codes
+          codes: codes,
+          synonyms: synonyms
         }
       });
     } else {

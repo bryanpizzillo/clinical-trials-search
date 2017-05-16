@@ -20,10 +20,10 @@ class NCIThesaurusLookup {
    * 
    * @param {any} client The LexEVS client to use
    * @param {string} version The version of the NCI Thesaurus to use. Defaults to "17.01e".
-   * 
+   * TODO: Go to api to determine current version when not specified.
    * @memberOf NCIThesaurusLookup
    */
-  constructor(client, version = "17.01e") {
+  constructor(client, version = "17.04d") {
     this.client = client;
     this.codeSystemVersion = version;
     this.termCache = {};

@@ -123,31 +123,50 @@ class SupplementStream extends Transform {
         intervention.synonyms = [];
 
         //Push the preferred name into synonyms, but ensure they are unique.
-        if (term.preferredName && (! _.some(intervention.synonyms, (name) => name.toLowerCase() == term.preferredName.toLowerCase()))) {
-          intervention.synonyms.push(term.preferredName);
+        //ASSUMING intervention_name is display_name
+        //if (term.preferredName && (! _.some(intervention.synonyms, (name) => name.toLowerCase() == term.preferredName.toLowerCase()))) {
+        //  intervention.synonyms.push(term.preferredName);
+        //}
+
+        if (intervention.inclusion_indicator == "TREE") {
+          //This came from bad thesaurus flat file, so fix the name.
+          intervention.intervention_name = term.preferredName;
         }
 
         //Push the display name into drug_names, but ensure they are unique.
-        if (term.displayName && (! _.some(intervention.synonyms, (name) => name.toLowerCase() == term.displayName.toLowerCase()))) {
-          intervention.synonyms.push(term.displayName);
+        if (term.displayName) {
+          intervention.display_name = term.displayName;          
         }
+
+        //The intervention type specific logic can figure out if display should be added to synonyms.
+        //if (term.displayName && (! _.some(intervention.synonyms, (name) => name.toLowerCase() == term.displayName.toLowerCase()))) {
+        //  intervention.synonyms.push(term.displayName);
+        //}
 
         if (
           intervention.intervention_type == "Drug" || 
           intervention.intervention_type == "Biological/Vaccine" ||
           intervention.intervention_type == "Dietary Supplement"
         ) {
-          //We have a drug so, do something with it.  Pull out all Display Name, Brand Name,
-          //foreign brand name, and preferred names with a source of NCI.
-          //We will replace the synonyms
-          let synonyms = term.filterSynonyms('NCI', ['BR', 'FB', 'PT', 'DN']);
 
-          //Push the synonyms into drug_names, but ensure they are unique.
-          synonyms.forEach((syn) => {
+          //We have a drug so, do something with it.  Add Brand Name and
+          //foreign brand name as synonyms.  Additional logic can add other
+          //names later on for driving menus.
+
+          //Add sorted brand names first
+          _.sortBy(term.filterSynonyms('NCI', ['BR']), 'text').forEach(syn => {
             if (! _.some(intervention.synonyms, (name) => name.toLowerCase() == syn.text.toLowerCase())) {
               intervention.synonyms.push(syn.text);
             }
           });
+
+          //Add sorted foreign Brand names next.
+          _.sortBy(term.filterSynonyms('NCI', ['FB']), 'text').forEach(syn => {
+            if (! _.some(intervention.synonyms, (name) => name.toLowerCase() == syn.text.toLowerCase())) {
+              intervention.synonyms.push(syn.text);
+            }
+          });
+
         }
 
         //We are looking up the drug,
@@ -403,7 +422,8 @@ class SupplementStream extends Transform {
     //Initialize the search interventions
     trial["_interventions"] = {
       drugs: [],
-      nondrugs: []
+      agent_categories: [],
+      nondrugs: []      
     }
 
     //TODO: For both drugs and non-drugs:
@@ -411,7 +431,7 @@ class SupplementStream extends Transform {
     //    may include the same intervention.
     // 2. Break out synonyms into a useful list and make sure that the Prefered name is included.
 
-    //Add Drugs
+    //Add Drugs & agent categories
     this._createDrugInterventions(trial);
     //Add Non-Drugs
     this._createNonDrugInterventions(trial);
@@ -420,6 +440,8 @@ class SupplementStream extends Transform {
   /**
    * Add _interventions_drug field for supporting autosuggest functions for interventions 
    * that are not "drugs". (Drug; Bological/Vaccine; Dietary Supplement)
+   * 
+   * This should also add in Agent categories.
    * 
    * NOTE: the _treatments field predates the splitting of drugs and other treatments,
    * removing it would be a breaking change to the API
@@ -432,36 +454,100 @@ class SupplementStream extends Transform {
 
     if (!trial.arms) { return; }
 
-    let drugs = [];
+    let drugs = []; //Specific Drugs
+    let agent_categories = []; //Upcoding to agent categories.
 
     trial.arms.forEach((arm) => {      
-      //Get only "drug" types
+      //Get only "drug" types and when the inclusion indicator is TRIAL
       _.filter(arm.interventions, (intr) => 
-          intr.intervention_type == "Drug" || 
-          intr.intervention_type == "Biological/Vaccine" ||
-          intr.intervention_type == "Dietary Supplement"
+          intr.inclusion_indicator == "TRIAL" && ( 
+            intr.intervention_type == "Drug" || 
+            intr.intervention_type == "Biological/Vaccine" ||
+            intr.intervention_type == "Dietary Supplement"
+          )
         )
         //Iterate over those "drugs"
         .forEach((intr) => {
-          //Iterate over the synonyms
-          //TODO: Push synonym names & type into a subcollection of drug for searching.
-          if (intr.synonyms) {
-            intr.synonyms.forEach((syn) => {
-              if (!_.some(drugs, (drug) => drug.code == intr.intervention_code && drug.name == syn)) {
-                drugs.push({
-                  name: syn,
-                  code: intr.intervention_code,
-                  type: intr.intervention_type
-                });
-              }
-            })
-          } else {
-            logger.warning(`Intervention: ${intr.intervention_name} (${intr.intervention_code}) missing synonyms.`)
+          
+          //Don't iterate the synonyms.  Make the object more structured with 
+          //the synonyms as part of the drug, and then make the synonyms searchable.
+          if (!_.some(drugs, (drug) => drug.code == intr.intervention_code)) {
+            drugs.push({
+              //Chose display name over preferred name
+              name: (intr.display_name && intr.display_name != intr.intervention_name) ? intr.display_name : intr.intervention_name,
+              code: intr.intervention_code,
+              type: intr.intervention_type,
+              //If display name was selected, then add preferred as first synonym.
+              synonyms: (intr.display_name && intr.display_name != intr.intervention_name) ? [intr.intervention_name].concat(intr.synonyms): intr.synonyms
+            });
           }
+
+          //Now pull out all of the agent categories.
+          //Each arm contains all the parents of the "TRIAL" interventions within
+          //that arm.
+          let agentParents = this._getDrugParents(intr, arm.interventions);
+          agentParents.forEach((agentParent) => {
+            if (!_.some(agent_categories, (agent) => agent.code == agentParent.intervention_code)) {
+              agent_categories.push(agentParent)
+            }
+          })
+
         })
     });
 
     trial._interventions.drugs = drugs;
+    trial._interventions.agent_categories = agent_categories;
+  }
+
+  /**
+   * Gets the ancestors of an intervention and returns a list
+   * of those items in our name,code,type format.
+   * 
+   * @param {any} curr_intr 
+   * @param {any} interventions 
+   * @returns 
+   * 
+   * @memberOf SupplementStream
+   */
+  _getDrugParents(curr_intr, interventions) {
+    let parents = [];
+
+    //Check that this curr_intr is not a top tree item.
+    //TODO: Implement blacklist or some other way to cap the root.    
+    if (curr_intr.parents.length >0 && curr_intr.parents[0] != 'root_node') {
+      curr_intr.parents.forEach((parentID) => {
+
+        let parent = _.find(interventions, ['intervention_code',parentID]);
+        
+        //If this parent is in our list, we should already have all of its parents.
+        if (parent && (!_.some(parents, (p)=> p.code == parent.intervention_code))) {
+          parents.push({
+            //Chose display name over preferred name
+            name: (parent.display_name && parent.display_name != parent.intervention_name) ? parent.display_name : parent.intervention_name,
+            code: parent.intervention_code,
+            type: parent.intervention_type,
+            //If display name was selected, then add preferred as first synonym.
+            synonyms: (parent.display_name && parent.display_name != parent.intervention_name) ? [parent.intervention_name].concat(parent.synonyms): parent.synonyms
+          });
+
+          //Now lets get the ancestors. Note ancestors will already be
+          //in our agent format, so no need to map the object when pushing.
+          let ancestors = this._getDrugParents(parent, interventions);     
+          ancestors.forEach((ancestor) => {
+            if (!_.some(parents, (p) => p.code == ancestor.code)) {
+              parents.push(ancestor);
+            }
+          });
+        } else {
+          logger.warning(`Parent Agent, ${parentID} cannot be found.`);
+        }
+      });
+    } else if (curr_intr.parents.length == 0) {
+      //An error here indicates an issue with add_intervention_parents.js
+      logger.warning(`Intervention, ${curr_intr.intervention_code} is not root node and has no parents.`)
+    }
+
+    return parents;
   }
 
   /**
@@ -484,19 +570,25 @@ class SupplementStream extends Transform {
     let nondrugs = [];
 
     trial.arms.forEach((arm) => {      
-      //Get only "non-drug" types
+      //Get only "non-drug" types and the inclusion idicator is TRIAL.
       _.filter(arm.interventions, (intr) => 
-          intr.intervention_type != "Drug" && 
-          intr.intervention_type != "Biological/Vaccine" &&
-          intr.intervention_type != "Dietary Supplement"
+          intr.inclusion_indicator == "TRIAL" && ( 
+            intr.intervention_type != "Drug" && 
+            intr.intervention_type != "Biological/Vaccine" &&
+            intr.intervention_type != "Dietary Supplement"
+          )
         )
         //Iterate over those "non-drugs"
         .forEach((intr) => {
-          
+          //We use 1 term for both display & preferred.  If we want both, then we should
+          //just create two items below.  Let's figure that out later.
           nondrugs.push({
-            name: intr.intervention_name,
+            //Chose display name over preferred name
+            name: (intr.display_name && intr.display_name != intr.intervention_name) ? intr.display_name : intr.intervention_name,
             code: intr.intervention_code,
-            type: intr.intervention_type
+            type: intr.intervention_type,
+            //If display name was selected, then add preferred as first synonym.
+            synonyms: (intr.display_name && intr.display_name != intr.intervention_name) ? [intr.intervention_name].concat(intr.synonyms): intr.synonyms
           });
         })
     });
@@ -510,12 +602,14 @@ class SupplementStream extends Transform {
     let treatments = {};
     trial.arms.forEach((arm) => {
       arm.interventions.forEach((intervention) => {
-        let treatment = intervention.intervention_name;
-        if (treatment) {
-          if (intervention.intervention_type) {
-            treatment += ` (${intervention.intervention_type})`;
+        if (intervention.inclusion_indicator == "TRIAL") {
+          let treatment = intervention.intervention_name;
+          if (treatment) {
+            if (intervention.intervention_type) {
+              treatment += ` (${intervention.intervention_type})`;
+            }
+            treatments[treatment] = 1;
           }
-          treatments[treatment] = 1;
         }
       });
     });
@@ -638,48 +732,33 @@ class SupplementStream extends Transform {
     trial._diseases = diseasesArr;
   }
 
-  _transform(buffer, enc, next) {
+  _transform(trial, enc, next) {
 
-    let line = buffer.toString();
-    if (line.slice(0, 2) === " {") {
-      var trial;
-      try {
-        trial = JSON.parse(line);
-      } catch (err) {
-        // TODO: send this as an alert email/sms
-        // logger.error("Could not parse trial: " + line);
+    logger.info(`Transforming trial with nci_id (${trial.nci_id})...`);
+
+    this._modifyStructure(trial);
+    this._addCurrentTrialStatusSortOrder(trial);
+    this._addStudyProtocolTypeSortOrder(trial);
+    this._addPrimaryPurposeCodeSortOrder(trial);
+    this._addPhaseSortOrder(trial);
+    this._createActiveSitesCount(trial);
+    this._createAgeInYears(trial);
+    this._createLocations(trial);
+    //The next step needs to take in a callback since it needs to contact LexEVS
+    //and contacting a remote service is an asynchronous function
+    this._addThesaurusTerms(trial, (err) => {
+      if (err) {
         logger.error(err);
         return next();
       }
-
-      logger.info(`Transforming trial with nci_id (${trial.nci_id})...`);
-
-      this._modifyStructure(trial);
-      this._addCurrentTrialStatusSortOrder(trial);
-      this._addStudyProtocolTypeSortOrder(trial);
-      this._addPrimaryPurposeCodeSortOrder(trial);
-      this._addPhaseSortOrder(trial);
-      this._createActiveSitesCount(trial);
-      this._createAgeInYears(trial);
-      this._createLocations(trial);
-      //The next step needs to take in a callback since it needs to contact LexEVS
-      //and contacting a remote service is an asynchronous function
-      this._addThesaurusTerms(trial, (err) => {
-        if (err) {
-          logger.error(err);
-          return next();
-        }
-        this._createTreatments(trial);
-        this._createSearchInterventions(trial);
-        this._createDiseases(trial);
-        
-        this.push(trial);
-        logger.info(`Completed Transforming trial with nci_id (${trial.nci_id}).`);
-        return next();
-      });      
-    } else {
-      return next(); // Skip this record.
-    }
+      this._createTreatments(trial);
+      this._createSearchInterventions(trial);
+      this._createDiseases(trial);
+      
+      this.push(trial);
+      logger.info(`Completed Transforming trial with nci_id (${trial.nci_id}).`);
+      return next();
+    });      
   }
 
 }
